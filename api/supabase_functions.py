@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from supabase import create_client
+from book_functions import create_book_record_using_isbn
 
 load_dotenv()
 
@@ -29,17 +30,32 @@ def check_book_exists(isbn: str):
     return len(data.data) > 0
 
 
-def add_record(table_name: str, record: dict):
+def add_book_record_using_isbn(isbn: str):
 
     """Add a new record to the Supabase database."""
 
     # Ensure the record is a dictionary with the required fields
 
-    # Check if book is already in the database by using ISBN - probably should do this check at the start before creating the book record.
-    # Extra safety check.
-    if table_name == "books" and "isbn" in record:
-        if check_book_exists(record.get("isbn")):
-            return {"error": "Book with this ISBN already exists."}
+    if check_book_exists(isbn):
+        return {"error": "Book with this ISBN already exists."}
+
+    book_record = create_book_record_using_isbn(isbn)
+
+    # only add the book record if it was created successfully
+    if book_record['title'] is None:
+        return {"error": "Failed to create book record."}
+
+    supabase = create_client(url, key)
+    supabase.table("books").insert(book_record).execute()
+
+    return {"success": f"Added new book. {book_record}"}
+
+
+def add_record(table_name: str, record: dict):
+
+    """Add a new record to the Supabase database."""
+
+    # Ensure the record is a dictionary with the required fields
 
     supabase = create_client(url, key)
     supabase.table(table_name).insert(record).execute()
@@ -93,8 +109,6 @@ def sign_in_user(email: str, password: str):
 
     return {"message": "User signed in successfully.", "user_id": session.user.id}
 
-    return session
-
 
 def sign_out_user():
 
@@ -104,19 +118,3 @@ def sign_out_user():
     supabase.auth.sign_out()
 
     return {"message": "User signed out successfully."}
-
-
-# test_record = {'isbn': '123456789',
-#                'title': 'TEST TITLE',
-#                'publisher': 'TEST PUBLISHER',
-#                'year': 2025, 'language': 'EN',
-#                'cover_url_thumbnail': 'TEST_SOME_URL',
-#                'cover_url_small_thumbnail': 'TEST_SOME_URL',
-#                'summary': 'TEST_SUMMARY',
-#                'extended_summary': 'TEST EXTENDED SUMMARY',
-#                'full_text': 'TEST FULL TEXT'}
-
-# add_book_record(test_record)
-# book_exists_flag = check_book_exists('1234567890')
-# books = get_books()
-# print(books)

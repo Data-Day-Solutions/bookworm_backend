@@ -1,9 +1,9 @@
 from flask import Flask, jsonify
 
 try:
-    from functions import square
+    from supabase_functions import add_book_record_using_isbn
 except (ImportError, ModuleNotFoundError):
-    from api.functions import square
+    from api.supabase_functions import add_book_record_using_isbn
 
 app = Flask(__name__)
 
@@ -23,10 +23,16 @@ def test():
     return "Test Page."
 
 
-@app.route('/square_endpoint/<int:n>')
-def square_endpoint(n):
-    value = str(square(n))
-    return value
+@app.route('/add_book_using_isbn/<isbn>')
+def add_book_using_isbn(isbn):
+
+    """Add a book using its ISBN."""
+
+    book_record_response = add_book_record_using_isbn(isbn)
+    if "error" in book_record_response:
+        return jsonify({"error": book_record_response["error"]}), 400
+
+    return book_record_response
 
 
 if __name__ == '__main__':
