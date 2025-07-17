@@ -1,7 +1,11 @@
 import os
 from dotenv import load_dotenv
 from supabase import create_client
-from book_functions import create_book_record_using_isbn
+
+try:
+    from book_functions import create_book_record_using_isbn
+except (ImportError, ModuleNotFoundError):
+    from api.book_functions import create_book_record_using_isbn
 
 load_dotenv()
 
