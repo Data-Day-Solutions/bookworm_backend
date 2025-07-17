@@ -1,5 +1,4 @@
 from flask import Flask, jsonify
-from supabase import create_client, Client
 
 try:
     from functions import square
