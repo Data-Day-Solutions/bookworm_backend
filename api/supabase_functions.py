@@ -86,12 +86,24 @@ def sign_in_user(email: str, password: str):
     """Sign in a user to the Supabase database."""
 
     supabase = create_client(url, key)
-    data = supabase.auth.sign_in(email=email, password=password)
+    session = supabase.auth.sign_in(email=email, password=password)
 
-    if data.error:
-        return {"error": data.error.message}
+    if session.error:
+        return {"error": session.error.message}
 
-    return {"message": "User signed in successfully.", "user_id": data.user.id}
+    return {"message": "User signed in successfully.", "user_id": session.user.id}
+
+    return session
+
+
+def sign_out_user():
+
+    """Sign out the current user from the Supabase database."""
+
+    supabase = create_client(url, key)
+    supabase.auth.sign_out()
+
+    return {"message": "User signed out successfully."}
 
 
 # test_record = {'isbn': '123456789',
