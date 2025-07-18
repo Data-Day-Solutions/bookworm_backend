@@ -61,6 +61,9 @@ def get_google_books_details_using_isbn(isbn, verbose=False):
 def get_book_meta_data_from_isbn(isbn, verbose=False):
 
     isbn = isbn.strip()
+
+    # TODO - clean up ISBN - remove "- etc"
+
     title = authors = publisher = year = language = cover_url_thumbnail = cover_url_small_thumbnail = None
 
     try:
