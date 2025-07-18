@@ -127,7 +127,7 @@ def sign_in_user(authenticated_supabase_client: Client, email: str, password: st
     # TODO - Add validation for username, email, and password
     # TODO - Add error handling for user sign-in
 
-    auth_connection = authenticated_supabase_client.auth.sign_in_with_password({"email": email, "password": password})
+    authenticated_supabase_client.auth.sign_in_with_password({"email": email, "password": password})
 
     return authenticated_supabase_client
 
@@ -136,17 +136,17 @@ if __name__ == "__main__":
 
     authenticated_supabase_client = get_authenticated_client()
 
-    # add record to non-RLS table
-    record = {"some_field": "whoa whoa whoa it's not authenticated!"}
-    authenticated_supabase_client.table('non_rls_table').insert(record).execute()
+    # # add record to non-RLS table
+    # record = {"some_field": "whoa whoa whoa it's not authenticated!"}
+    # authenticated_supabase_client.table('non_rls_table').insert(record).execute()
 
-    # try to add record to RLS table
-    try:
-        record = {"test_value": "whoa whoa whoa it's not authenticated! this shouldn't work!"}
-        authenticated_supabase_client.table('test_table').insert(record).execute()
-    except:
-        print('Adding to RLS table prior to authentication failed as expected.')
+    # # try to add record to RLS table
+    # try:
+    #     record = {"test_value": "whoa whoa whoa it's not authenticated! this shouldn't work!"}
+    #     authenticated_supabase_client.table('test_table').insert(record).execute()
+    # except:
+    #     print('Adding to RLS table prior to authentication failed as expected.')
 
-    authenticated_supabase_client = sign_in_user(authenticated_supabase_client, "davidshaw1985@gmail.com", "password123")
+    # authenticated_supabase_client = sign_in_user(authenticated_supabase_client, "davidshaw1985@gmail.com", "password123")
 
-    add_record(authenticated_supabase_client, "test_table", {"test_value": "whoa whoa whoa it's authenticated!"})
+    # add_record(authenticated_supabase_client, "test_table", {"test_value": "whoa whoa whoa it's authenticated!"})
