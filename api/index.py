@@ -88,3 +88,5 @@ if __name__ == '__main__':
 
 # TypeError: The view function did not return a valid response. The return type must be a string, dict, list,
 #  tuple with headers or status, Response instance, or WSGI callable, but it was a int.
+
+# some comment
