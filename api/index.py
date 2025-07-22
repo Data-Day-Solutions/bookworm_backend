@@ -1,6 +1,7 @@
 import os
 from flask import Flask, session, request, redirect, url_for, jsonify
 from supabase import create_client, Client
+from flask_cors import CORS
 
 try:
     from supabase_functions import add_book_record_using_isbn, get_authenticated_client
@@ -8,6 +9,7 @@ except (ImportError, ModuleNotFoundError):
     from api.supabase_functions import add_book_record_using_isbn, get_authenticated_client
 
 app = Flask(__name__)
+CORS(app, supports_credentials=True)
 
 app.secret_key = 'your-very-secure-secret-key'  # Use an env var in production
 
@@ -27,8 +29,10 @@ def login():
 
     """Login route to authenticate users."""
 
-    email = request.form['email']
-    password = request.form['password']
+    data = request.get_json()
+
+    email = data.get('email')
+    password = data.get('password')
 
     res = supabase.auth.sign_in_with_password({'email': email, 'password': password})
 
@@ -38,7 +42,10 @@ def login():
     # return redirect(url_for('dashboard'))
     # return redirect(url_for('cracked.com'))
 
-    return jsonify({"message": f"Hello, I got your post request with you email and password! You are now logged in using {email} and {password}."})
+    return jsonify({
+        "access_token": res.session.access_token,
+        "refresh_token": res.session.refresh_token,
+    })
 
 
 @app.route('/dashboard')
