@@ -1,7 +1,10 @@
 import os
-from flask import Flask, session, request, redirect, url_for, jsonify
+from flask import Flask, session, request, redirect, url_for, jsonify, Response, make_response
 from supabase import create_client, Client
 from flask_cors import CORS
+
+# from flask_limiter import Limiter  # For rate limiting
+# from flask_limiter.util import get_remote_address
 
 try:
     from supabase_functions import add_book_record_using_isbn, get_authenticated_client, get_all_records
@@ -9,14 +12,45 @@ except (ImportError, ModuleNotFoundError):
     from api.supabase_functions import add_book_record_using_isbn, get_authenticated_client
 
 app = Flask(__name__)
+
 CORS(app, supports_credentials=True, origins=["http://localhost:19260"])
 
 app.secret_key = 'your-very-secure-secret-key'  # Use an env var in production
+
+# Configure rate limiter
+# limiter = Limiter(
+#     get_remote_address,  # Use IP address for rate limiting
+#     app=app,
+#     default_limits=["200 per day", "50 per hour"],  # Default limits for all routes
+#     storage_uri="memory://"  # Store rate limiting data in memory
+# )
 
 SUPABASE_URL = os.environ['SUPABASE_URL']
 SUPABASE_KEY = os.environ['SUPABASE_KEY']
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+# @app.before_request
+# def handle_preflight():
+#     if request.method == "OPTIONS":
+#         res = Response()
+#         res.headers['X-Content-Type-Options'] = '*'
+#         return res
+
+@app.route('/allow_methods', methods=['OPTIONS'])
+def options():
+
+    """Handle OPTIONS request for CORS"""
+
+    response = make_response()
+
+    response.headers['Allow'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+
+    return response
 
 
 @app.route('/')
@@ -91,6 +125,7 @@ def add_book_using_isbn(isbn):
 
     return book_record_response
 
+
 @app.route('/get_all_books')
 def get_all_books():
 
@@ -99,11 +134,12 @@ def get_all_books():
     authenticated_supabase_client = get_authenticated_client()
     response = get_all_records(authenticated_supabase_client, "books")
 
-    print(response.data);
+    print(response.data)
     print("got data")
 
     return jsonify({"books": response.data})
 
 
 if __name__ == '__main__':
+
     app.run(debug=True)
