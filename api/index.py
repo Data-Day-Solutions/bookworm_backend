@@ -34,6 +34,8 @@ def login():
     email = data.get('email')
     password = data.get('password')
 
+    # handle errors
+
     res = supabase.auth.sign_in_with_password({'email': email, 'password': password})
 
     session['access_token'] = res.session.access_token
