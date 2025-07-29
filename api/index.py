@@ -13,7 +13,15 @@ except (ImportError, ModuleNotFoundError):
 
 app = Flask(__name__)
 
-CORS(app, supports_credentials=True, origins=["http://localhost:19260"])
+CORS(app, 
+    supports_credentials=True, 
+    origins=["http://localhost:19260"]
+)
+
+app.config.update(
+    SESSION_COOKIE_SAMESITE='None',
+    SESSION_COOKIE_SECURE=True,
+)
 
 app.secret_key = 'your-very-secure-secret-key'  # Use an env var in production
 
