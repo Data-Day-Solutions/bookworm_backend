@@ -28,7 +28,7 @@ def get_authenticated_client() -> Client:
         if access_token:
             supabase_client.auth.set_session(access_token, refresh_token)
 
-    except RuntimeError:
+    except (KeyError, ValueError, RuntimeError):
         return supabase_client
 
     return supabase_client

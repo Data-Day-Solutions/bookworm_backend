@@ -4,12 +4,12 @@ from supabase import create_client, Client
 from flask_cors import CORS
 
 try:
-    from supabase_functions import add_book_record_using_isbn, get_authenticated_client
+    from supabase_functions import add_book_record_using_isbn, get_authenticated_client, get_all_records
 except (ImportError, ModuleNotFoundError):
     from api.supabase_functions import add_book_record_using_isbn, get_authenticated_client
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins=["http://localhost:19260"])
 
 app.secret_key = 'your-very-secure-secret-key'  # Use an env var in production
 
@@ -89,9 +89,19 @@ def add_book_using_isbn(isbn):
 
     return book_record_response
 
+@app.route('/get_all_books')
+def get_all_books():
+
+    """Retrieve all books"""
+
+    authenticated_supabase_client = get_authenticated_client()
+    response = get_all_records(authenticated_supabase_client, "books")
+
+    print(response.data);
+    print("got data")
+
+    return jsonify({"books": response.data})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-# TypeError: The view function did not return a valid response. The return type must be a string, dict, list,
-#  tuple with headers or status, Response instance, or WSGI callable, but it was a int.
