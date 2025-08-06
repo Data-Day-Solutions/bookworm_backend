@@ -6,15 +6,15 @@ from flask_cors import CORS
 import werkzeug
 from PIL import Image
 from io import BytesIO
+from datetime import timedelta
 
 # from flask_limiter import Limiter  # For rate limiting
 # from flask_limiter.util import get_remote_address
 
 try:
-    from supabase_functions import add_book_record_using_isbn, get_authenticated_client, get_all_records, add_record
+    from supabase_functions import add_book_record_using_isbn, get_authenticated_client, get_all_records, add_record, create_new_supabase_user
 except (ImportError, ModuleNotFoundError):
-    from api.supabase_functions import add_book_record_using_isbn, get_authenticated_client, add_record, get_all_records
-
+    from api.supabase_functions import add_book_record_using_isbn, get_authenticated_client, add_record, get_all_records, create_new_supabase_user
 try:
     from image_recognition import detect_and_decode_barcode
 except (ImportError, ModuleNotFoundError):
@@ -28,7 +28,7 @@ except (ImportError, ModuleNotFoundError):
 app = Flask(__name__)
 
 CORS(app, 
-    supports_credentials=True, 
+    supports_credentials=True,
     origins=["http://localhost:19260"]
 )
 
@@ -37,7 +37,10 @@ app.config.update(
     SESSION_COOKIE_SECURE=True,
 )
 
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=60)
 app.secret_key = 'your-very-secure-secret-key'  # Use an env var in production
+
+# session.clear()  # Clear session at startup for fresh state
 
 # Configure rate limiter
 # limiter = Limiter(
@@ -56,6 +59,23 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 @app.route('/')
 def index():
     return jsonify({"message": "Hello from Flask on Vercel!"})
+
+
+@app.route('/dashboard')
+def dashboard():
+
+    """Dashboard route that requires authentication."""
+
+    client = get_authenticated_client()
+    user = client.auth.get_user()
+
+    if not user.user:
+        return redirect(url_for('login'))
+
+    return jsonify({
+        "message": "Dasboard re-direction successful.",
+        "data": None
+    }), 200
 
 
 @app.route('/upload_image_for_isbn', methods=["POST"])
@@ -86,18 +106,33 @@ def upload_image_for_isbn():
 
             # TODO - If multiple barcodes are detected, use the first one - needs to be improved
             isbn_number = barcodes[0]
-            book_record = create_book_record_using_isbn(isbn_number)
 
-            return jsonify({
-                "code": 200,
-                "message": "Image Uploaded Successfully.",
-                "data": book_record
-            })
+            authenticated_supabase_client = get_authenticated_client()
+            book_record = add_book_record_using_isbn(authenticated_supabase_client, isbn_number)
+
+            return jsonify(book_record), 200
 
         except IndexError:
-            return jsonify({"error": "No barcode detected in the image."}), 400
+            return jsonify({"message": "No barcode detected in the image.", "data": None}), 400
     else:
-        return jsonify({"error": "User not authenticated."}), 401
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
+
+
+@app.route('/create_new_user', methods=['POST'])
+def create_new_user():
+
+    """Route to create users."""
+
+    data = request.get_json()
+
+    email = data.get('email')
+    password = data.get('password')
+
+    # handle errors
+
+    response = create_new_supabase_user(email, password)
+
+    return jsonify(response), 200
 
 
 @app.route('/login', methods=['POST'])
@@ -121,26 +156,12 @@ def login():
     # return redirect(url_for('cracked.com'))
 
     return jsonify({
-        "code": 200,
         "message": "Login successful.",
-    })
+        "data": None
+    }), 200
 
 
-@app.route('/dashboard')
-def dashboard():
-
-    """Dashboard route that requires authentication."""
-
-    client = get_authenticated_client()
-    user = client.auth.get_user()
-
-    if not user.user:
-        return redirect(url_for('login'))
-
-    return f"Welcome, {user.user.email}"
-
-
-@app.route('/logout')
+@app.route('/logout', methods=['GET'])
 def logout():
 
     """Logout route to clear session tokens."""
@@ -154,9 +175,9 @@ def logout():
     # return redirect(url_for('login'))
 
     return jsonify({
-        "code": 200,
         "message": "Logout successful.",
-    })
+        "data": None
+    }), 200
 
 
 @app.route('/add_book_using_isbn/<isbn>')
@@ -165,11 +186,14 @@ def add_book_using_isbn(isbn):
     """Add a book using its ISBN."""
 
     authenticated_supabase_client = get_authenticated_client()
-    book_record_response = add_book_record_using_isbn(authenticated_supabase_client, isbn)
-    if "error" in book_record_response:
-        return jsonify({"error": book_record_response["error"]}), 400
 
-    return book_record_response
+    if session:
+
+        book_record_response = add_book_record_using_isbn(authenticated_supabase_client, isbn)
+
+        return book_record_response, 200
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
 
 
 @app.route('/create_new_library', methods=['POST'])
@@ -177,31 +201,53 @@ def create_new_library():
 
     """Create new library for users who are not assigned to one."""
 
-    user = authenticated_supabase_client.auth.get_user()
+    if session:
 
-    data = request.get_json()
+        authenticated_supabase_client = get_authenticated_client()
+        user_id = str(authenticated_supabase_client.auth.get_user().user.id)
 
-    library_name = data.get('library_name')
-    library_colour = data.get('library_colour')
-    library_image_url = data.get('library_image_url')
+        # check if user already has a library - one per user initially
+        user_libraries = authenticated_supabase_client.table("library_users").select("*").eq("user_id", user_id).execute()
+        if user_libraries.data:
+            return jsonify({"message": "User already has a library.", "data": None}), 403
+        else:
+            data = request.get_json()
 
-    record = {"library_name": library_name,
-              "library_colour": library_colour,
-              "library_image": library_image_url}
+            library_name = data.get('library_name')
+            library_colour = data.get('library_colour')
+            library_image_url = data.get('library_image_url')
 
-    authenticated_supabase_client = get_authenticated_client()
+            # check that library/-name does not coincide with existing libraries
+            existing_libraries = authenticated_supabase_client.table("library_details").select("*").eq("library_name", library_name).execute()
+            if existing_libraries.data:
+                return jsonify({"message": "Library name already exists. Please choose an alternative.", "data": None}), 403
 
-    # TODO - add error handling for missing fields, ensure library name is unique, etc.
+            record = {"library_name": library_name,
+                      "library_colour": library_colour,
+                      "library_image": library_image_url}
 
-    add_record(authenticated_supabase_client, "library_details", record)
+            # TODO - add error handling for missing fields, ensure library name is unique, etc.
+            add_record(authenticated_supabase_client, "library_details", record)
 
-    return jsonify({
-        "code": 200,
-        "message": "Library creation successful.",
-    })
+            # associate user with newly created library by adding user to library_users table
+            new_library_id = authenticated_supabase_client.table("library_details").select("*").eq("library_name", library_name).execute().data[0]['library_id']
+
+            # do not add a record if there is a matching one on both user_id and library_id
+            existing_user_library = authenticated_supabase_client.table("library_users").select("*").eq("user_id", user_id).eq("library_id", new_library_id).execute()
+            if not existing_user_library.data:
+                authenticated_supabase_client.table("library_users").insert({
+                    "user_id": user_id,
+                    "library_id": new_library_id
+                }).execute()
+
+            return jsonify({
+                "message": "Library creation successful. User assigned to library.",
+                "data": record}), 200
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
 
 
-@app.route('/get_library', methods=['GET'])
+@app.route('/get_user_library', methods=['GET'])
 def get_library():
 
     """Finds the library for the user."""
@@ -209,27 +255,71 @@ def get_library():
     authenticated_supabase_client = get_authenticated_client()
 
     library_id = 0
-    user = authenticated_supabase_client.auth.get_user()
+    user_id = str(authenticated_supabase_client.auth.get_user().user.id)
+    user_libraries = authenticated_supabase_client.table("library_users").select("*").eq("user_id", user_id).execute()
+
+    # could be multiple libraries, but for now we assume one
+    if user_libraries.data:
+        library_id = user_libraries.data[0]['library_id']
+    else:
+        return {"message": "User does not have an active library. Re-direct to library creation.", "data": None}
 
     return jsonify({
-        "code": 200,
         "library_id": library_id,
-    })
+        "data": None
+    }), 200
+
+
+@app.route('/get_all_user_books')
+def get_all_user_books():
+
+    """Retrieve all books for the authenticated user."""
+
+    if session:
+
+        authenticated_supabase_client = get_authenticated_client()
+
+        user_library_details = get_library()
+        user_library_id = user_library_details[0].json['library_id']
+
+        response = authenticated_supabase_client.table("user_library_books").select(
+            """
+            *,
+            books (*)
+            """
+        ).eq("library_id", user_library_id).execute()
+
+        # Flatten the response - each row contains a 'books' field with book details
+        flattened_results = []
+        for row in response.data:
+            flat_row = row.copy()
+            book_data = flat_row.pop("books", {})
+            flat_row.update(book_data)
+            flattened_results.append(flat_row)
+
+        jsonified_books = jsonify({"books": flattened_results})
+
+        return jsonified_books
+
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
+
 
 @app.route('/get_all_books')
 def get_all_books():
 
     """Retrieve all books"""
 
-    authenticated_supabase_client = get_authenticated_client()
-    response = get_all_records(authenticated_supabase_client, "books")
+    if session:
 
-    # print(response.data)
-    # print("got data")
+        authenticated_supabase_client = get_authenticated_client()
+        response = get_all_records(authenticated_supabase_client, "books")
 
-    jsonified_books = jsonify({"books": response.data})
+        jsonified_books = jsonify({"books": response.data})
 
-    return jsonified_books
+        return jsonified_books
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
 
 
 if __name__ == '__main__':

@@ -47,8 +47,6 @@ def check_book_exists(authenticated_supabase_client: Client, isbn: str):
 
     """Check if a book with the given ISBN exists in the Supabase database."""
 
-    # Returns True if the book exists, False otherwise
-
     data = authenticated_supabase_client.table("books").select("book_id").eq("isbn", isbn).execute()
 
     return len(data.data) > 0
@@ -61,18 +59,48 @@ def add_book_record_using_isbn(authenticated_supabase_client: Client,
 
     # Ensure the record is a dictionary with the required fields
 
-    if check_book_exists(authenticated_supabase_client, isbn):
-        return {"error": "Book with this ISBN already exists."}
+    if not check_book_exists(authenticated_supabase_client, isbn):
 
-    book_record = create_book_record_using_isbn(isbn)
+        book_record = create_book_record_using_isbn(isbn)
+        if book_record['title'] is None:
+            return {"message": "Failed to create book record.", "data": None}
 
-    # only add the book record if it was created successfully
-    if book_record['title'] is None:
-        return {"error": "Failed to create book record."}
+        authenticated_supabase_client.table("books").insert(book_record).execute()
 
-    authenticated_supabase_client.table("books").insert(book_record).execute()
+    # use the ISBN to find the corresponding book_id - 1:1 relationship
+    book_id = authenticated_supabase_client.table("books").select("book_id").eq("isbn", isbn).execute().data[0]
+    book_details = authenticated_supabase_client.table("books").select("*").eq("isbn", isbn).execute().data[0]
 
-    return {"success": f"Added new book. {book_record}"}
+    # get user's active library
+    user_id = str(authenticated_supabase_client.auth.get_user().user.id)
+    user_libraries = authenticated_supabase_client.table("library_users").select("*").eq("user_id", user_id).execute()
+
+    # could be multiple libraries, but for now we assume one
+    if user_libraries.data:
+        library_id = user_libraries.data[0]['library_id']
+    else:
+        return {"message": "User does not have an active library. Re-direct to library creation.", "data": None}
+
+    # check if book already exists in user's library
+    existing_book = authenticated_supabase_client.table("user_library_books").select("*").eq("book_id", book_id['book_id']).eq("library_id", library_id).execute()
+    if existing_book.data:
+        # if it exists, increment the number of copies owned
+        num_copies = existing_book.data[0]['num_copies_owned'] + 1
+        authenticated_supabase_client.table("user_library_books").update({"num_copies_owned": num_copies}).eq("book_id", book_id['book_id']).eq("library_id", library_id).execute()
+        book_details = authenticated_supabase_client.table("books").select("*").eq("isbn", isbn).execute().data[0]
+
+        return {"message": "Book already exists in user's library. Incremented number of copies.", "data": book_details}
+
+    else:
+        # add book to user's library
+        authenticated_supabase_client.table("user_library_books").insert({
+            "book_id": book_id['book_id'],
+            "num_copies_owned": 1,
+            "location_info": "Unknown",
+            "library_id": library_id
+        }).execute()
+
+        return {"message": f"Added new book to user's library.", "data": book_details}
 
 
 def add_record(authenticated_supabase_client: Client,
@@ -108,16 +136,21 @@ def delete_record_by_id(authenticated_supabase_client: Client,
     authenticated_supabase_client.table(table_name).delete().eq(f"{id_field}", id).execute()
 
 
-def create_new_user(authenticated_supabase_client: Client, email: str, password: str):
+def create_new_supabase_user(email: str, password: str):
 
     """Create a new user in the Supabase database."""
 
     # TODO - Add validation for username, email, and password
     # TODO - Add error handling for user creation
 
-    auth_connection = authenticated_supabase_client.auth.sign_up({"email": email,"password": password,})
+    authenticated_supabase_client = get_authenticated_client()
 
-    return {"message": "User created successfully."}
+    try:
+        auth_connection = authenticated_supabase_client.auth.sign_up({"email": email,"password": password,})
+    except:
+        return {"message": "Failed to create user. User may already exist.", "data": None}
+
+    return {"message": "User created successfully.", "data": None}
 
 
 def sign_in_user(authenticated_supabase_client: Client, email: str, password: str):
