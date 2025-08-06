@@ -237,7 +237,9 @@ def create_new_library():
             if not existing_user_library.data:
                 authenticated_supabase_client.table("library_users").insert({
                     "user_id": user_id,
-                    "library_id": new_library_id
+                    "library_id": new_library_id,
+                    "library_role": "admin"  # Default role for the user creating the library
+                     # - ensures that only they can invite new users to library and remove user
                 }).execute()
 
             return jsonify({
@@ -308,7 +310,7 @@ def get_all_user_books():
 @app.route('/get_all_books')
 def get_all_books():
 
-    """Retrieve all books"""
+    """Retrieve all books."""
 
     if session:
 
@@ -320,6 +322,15 @@ def get_all_books():
         return jsonified_books
     else:
         return jsonify({"message": "User not authenticated.", "data": None}), 401
+
+
+# TODO - add a route to invite another user to an existing library
+# check that the user is authenticated
+# check that the user is an admin of the library
+# send an email to the invited user with a link to accept the invitation
+# or just add the user to the library_users table - they do need to have an account already
+# check and inform admin if the user has not fully registered yet
+# add the invited user to the library_users table
 
 
 if __name__ == '__main__':
