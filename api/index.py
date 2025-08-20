@@ -8,6 +8,9 @@ from PIL import Image
 from io import BytesIO
 from datetime import timedelta
 
+import pandas as pd
+from tqdm import tqdm
+
 # from flask_limiter import Limiter  # For rate limiting
 # from flask_limiter.util import get_remote_address
 
@@ -78,6 +81,57 @@ def dashboard():
     }), 200
 
 
+# create route to load data from a provided csv file
+@app.route('/upload_isbn_csv', methods=['POST'])
+def upload_isbn_csv():
+
+    """Endpoint to upload a CSV file."""
+
+    if session:
+
+        if 'file' not in request.files:
+            return jsonify({"message": "No file part in the request.", "data": None}), 400
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({"message": "No selected file.", "data": None}), 400
+
+        if file and werkzeug.utils.secure_filename(file.filename).endswith('.csv'):
+            filename = werkzeug.utils.secure_filename(file.filename)
+            upload_filename = os.path.join('api', 'uploads', filename)
+            file.save(upload_filename)
+
+            # Process the CSV file here
+            isbn_df = pd.read_csv(upload_filename)
+
+            # Process df and add records to the database
+            # Ensure the 'ISBN' column exists in the DataFrame
+            if 'ISBN' not in isbn_df.columns:
+                return jsonify({"message": "CSV file must contain an 'ISBN' column.", "data": None}), 400
+
+            # Extract ISBNs from the DataFrame
+            isbn_list = isbn_df['ISBN'].tolist()
+            isbn_list = [str(isbn).strip() for isbn in isbn_list if pd.notna(isbn)]  # Ensure ISBNs are strings and not NaN
+            for isbn in tqdm(isbn_list):
+
+                # Create book record using the ISBN
+                authenticated_supabase_client = get_authenticated_client()
+                message = add_book_record_using_isbn(authenticated_supabase_client, isbn)
+
+            os.remove(upload_filename)
+
+            # TODO - add error handling for missing ISBNs, invalid ISBNs, etc. Inform user about the number of books added.
+            # TODO - also provide user information about the books that were not added due to errors
+            # TODO - return the list of added books or a summary of the operation
+            # TODO - mention duplicate ISBNs and how they were handled
+
+            return jsonify({"message": "File uploaded successfully. Books added.", "data": None}), 200
+        else:
+            return jsonify({"message": "Invalid file format. Only CSV files are allowed.", "data": None}), 400
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
+
+
 @app.route('/upload_image_for_isbn', methods=["POST"])
 def upload_image_for_isbn():
 
@@ -108,6 +162,8 @@ def upload_image_for_isbn():
             isbn_number = barcodes[0]
 
             authenticated_supabase_client = get_authenticated_client()
+
+            # adds book to main library and returns the book record - for user to confirm to add to their library
             book_record = add_book_record_using_isbn(authenticated_supabase_client, isbn_number)
 
             return jsonify(book_record), 200
@@ -131,6 +187,8 @@ def create_new_user():
     # handle errors
 
     response = create_new_supabase_user(email, password)
+
+    # TODO - Ensure that response is in standard format
 
     return jsonify(response), 200
 
@@ -303,6 +361,50 @@ def get_all_user_books():
 
         return jsonified_books
 
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
+
+
+@app.route('/remove_book_from_library/<int:book_id>', methods=['DELETE'])
+def remove_book_from_library(book_id):
+
+    """Remove a book from the user's library."""
+
+    if session:
+
+        try:
+            authenticated_supabase_client = get_authenticated_client()
+            user_library_details = get_library()
+            user_library_id = user_library_details[0].json['library_id']
+
+            # delete the book from the user's library
+            authenticated_supabase_client.table("user_library_books").delete().eq("book_id", book_id).eq("library_id", user_library_id).execute()
+            return jsonify({"message": "Book removed from user's library.", "data": None}), 200
+
+        except Exception as e:
+            return jsonify({"message": "Error removing book from library.", "error": str(e), "data": None}), 500
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
+
+
+# fucntion to remove all books from the user's library
+@app.route('/remove_all_books_from_library', methods=['DELETE'])
+def remove_all_books_from_library():
+
+    """Remove all books from the user's library."""
+
+    if session:
+        try:
+            authenticated_supabase_client = get_authenticated_client()
+            user_library_details = get_library()
+            user_library_id = user_library_details[0].json['library_id']
+
+            # delete all books from the user's library
+            authenticated_supabase_client.table("user_library_books").delete().eq("library_id", user_library_id).execute()
+            return jsonify({"message": "All books removed from user's library.", "data": None}), 200
+
+        except Exception as e:
+            return jsonify({"message": "Error removing all books from library.", "error": str(e), "data": None}), 500
     else:
         return jsonify({"message": "User not authenticated.", "data": None}), 401
 

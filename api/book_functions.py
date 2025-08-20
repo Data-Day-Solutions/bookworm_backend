@@ -40,6 +40,9 @@ def get_google_books_details_using_isbn(isbn, verbose=False):
     page_count = volume_info["volumeInfo"]["pageCount"]
     language = volume_info["volumeInfo"]["language"]
 
+    description = volume_info["volumeInfo"]["description"]
+    categories = volume_info["volumeInfo"]["categories"]
+
     # clean summary
     summary = summary.replace("<b>", "").replace("</b>", "").replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
     summary = summary.replace("\n", " ").replace("\r", " ").strip()
@@ -55,7 +58,7 @@ def get_google_books_details_using_isbn(isbn, verbose=False):
         print("\nLanguage:", language)
         print("\n***")
 
-    return title, summary, author, public_domain, page_count, language
+    return title, summary, author, public_domain, page_count, language, description, categories
 
 
 def get_book_meta_data_from_isbn(isbn, verbose=False):
@@ -125,7 +128,7 @@ def get_book_meta_data_from_isbn(isbn, verbose=False):
 
     # retrieve book summary from Google using ISBN
     try:
-        title, summary, author, public_domain, page_count, language = get_google_books_details_using_isbn(isbn, verbose=False)
+        title, summary, author, public_domain, page_count, language, description, categories = get_google_books_details_using_isbn(isbn, verbose=False)
 
         # fill in data if not already set
         # if meta_title == 'Unknown':
@@ -133,25 +136,57 @@ def get_book_meta_data_from_isbn(isbn, verbose=False):
         # if meta_authors == 'Unknown':
         #     meta_authors = author
 
+        categories = ', '.join(categories) if categories else ""
+
     except:
         summary = 'Summary! Here is the summary.'
         public_domain = None
         page_count = None
+        description = 'Description! Here is the description.'
+        categories = ""
 
     if verbose:
-        print(f'ISBN: {isbn} - Title: {title} - Author(s): {authors} - Publisher: {publisher} - Year: {year} - Language - {language}  - Cover URL Small Thumbnail: {cover_url_small_thumbnail} - Summary - {summary} - Public Domain: {public_domain} - Page Count: {page_count}')
+        print(f'ISBN: {isbn} - Title: {title} - Author(s): {authors} - Publisher: {publisher} - Year: {year} - Language - {language}  - Cover URL Small Thumbnail: {cover_url_small_thumbnail} - Summary - {summary} - Public Domain: {public_domain} - Page Count: {page_count} - Description: {description} - Categories: {categories}')
 
-    return isbn, title, authors, publisher, year, language, cover_url_thumbnail, cover_url_small_thumbnail, summary, public_domain, page_count
+    return isbn, title, authors, publisher, year, language, cover_url_thumbnail, cover_url_small_thumbnail, summary, public_domain, page_count, description, categories
 
 
 def create_book_record_using_isbn(isbn: str):
 
     """Create a book record in the database."""
 
-    isbn, title, authors, publisher, year, language, cover_url_thumbnail, cover_url_small_thumbnail, summary, public_domain, page_count = get_book_meta_data_from_isbn(isbn)
+    isbn, title, authors, publisher, year, language, cover_url_thumbnail, cover_url_small_thumbnail, summary, public_domain, page_count, description, categories = get_book_meta_data_from_isbn(isbn)
 
-    extended_summary = "Extended summary goes here."
+    extended_summary = description
     full_text = "Full text goes here."
+
+    # Populate empty fields with default values
+    if title is None:
+        title = "Unknown Title"
+    if authors is None:
+        authors = "Unknown Author"
+    if publisher is None:
+        publisher = "Unknown Publisher"
+    if year is None:
+        year = 0000
+    if language is None:
+        language = "Unknown Language"
+    if cover_url_thumbnail is None:
+        cover_url_thumbnail = "https://iili.io/FpkDnzg.png"
+    if cover_url_small_thumbnail is None:
+        cover_url_small_thumbnail = "https://iili.io/FpkDnzg.png"
+    if summary is None:
+        summary = "No summary available."
+    if public_domain is None:
+        public_domain = False
+    if page_count is None:
+        page_count = 0
+    if extended_summary is None:
+        extended_summary = "No extended summary available."
+    if full_text is None:
+        full_text = "No full text available."
+    if categories is None:
+        categories = ""
 
     book_record = {
         "isbn": isbn,
@@ -166,7 +201,16 @@ def create_book_record_using_isbn(isbn: str):
         "extended_summary": extended_summary,
         "full_text": full_text,
         "public_domain": public_domain,
-        "page_count": page_count
+        "page_count": page_count,
+        "categories": categories
     }
 
     return book_record
+
+
+if __name__ == "__main__":
+
+    # Example usage
+    isbn = "9780135166307"
+    book_record = create_book_record_using_isbn(isbn)
+    print(book_record)
