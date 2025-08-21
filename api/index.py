@@ -1,3 +1,4 @@
+import base64
 import os
 import cv2
 from flask import Flask, session, request, redirect, url_for, jsonify, Response, make_response
@@ -140,8 +141,10 @@ def upload_image_for_isbn():
     # TODO - check if the user is authenticated before allowing image upload
     # validate inputs - look into pydantic
     if session:
+        data = request.get_json()
 
-        image_bytes = request.data
+        image_base64 = data['base64_image']
+        image_bytes = base64.b64decode(image_base64)
 
         file_id = "000001"  # This should be generated dynamically, e.g., using a UUID or database ID
         filename = "api/images/temp_filename_" + file_id
