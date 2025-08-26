@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 try:
-    from book_functions import create_book_record_using_isbn
+    from book_functions import create_book_record_using_isbn, clean_isbn
 except (ImportError, ModuleNotFoundError):
-    from api.book_functions import create_book_record_using_isbn
+    from api.book_functions import create_book_record_using_isbn, clean_isbn
 
 load_dotenv()
 
@@ -56,6 +56,8 @@ def add_book_record_using_isbn(authenticated_supabase_client: Client,
                                isbn: str):
 
     """Add a new record to the Supabase database."""
+
+    isbn = clean_isbn(isbn)
 
     # Ensure the record is a dictionary with the required fields
 

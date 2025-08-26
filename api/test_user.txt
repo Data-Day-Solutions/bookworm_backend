@@ -2,3 +2,8 @@ test_password@testemail.com
 test_password
 
 9780571235469 Quantum Theory
+978-1503280786 Moby Dick
+978-1503261389 Dracula
+978-0140623321 Frankenstein
+978-1503290563 Pride And Prejudice
+978-1505259568 Romeo & Juliet

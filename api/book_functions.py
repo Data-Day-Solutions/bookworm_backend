@@ -61,11 +61,20 @@ def get_google_books_details_using_isbn(isbn, verbose=False):
     return title, summary, author, public_domain, page_count, language, description, categories
 
 
-def get_book_meta_data_from_isbn(isbn, verbose=False):
+def clean_isbn(isbn):
+
+    """Clean up ISBN number by removing unwanted characters."""
 
     isbn = isbn.strip()
+    isbn = isbn.replace("-", "").replace(" ", "")
+    isbn = isbn.strip()
 
-    # TODO - clean up ISBN - remove "- etc"
+    return isbn
+
+
+def get_book_meta_data_from_isbn(isbn, verbose=False):
+
+    """Retrieve book metadata using its ISBN number."""
 
     title = authors = publisher = year = language = cover_url_thumbnail = cover_url_small_thumbnail = None
 

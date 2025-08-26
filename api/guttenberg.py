@@ -23,6 +23,8 @@ def download_gutenberg_book(author: str, title: str, output_file: str):
         author_field.send_keys(author)
         author_field.send_keys(Keys.RETURN)  # Submit search
 
+        # remove stop words
+
         p_element = WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.PARTIAL_LINK_TEXT, "Frank"))
         )
