@@ -40,6 +40,7 @@ llm = ChatOpenAI(temperature=0)
 # fetch the prompt from the prompt hub
 prompt = hub.pull("hwchase17/openai-functions-agent")
 
+# TODO - create own prompt
 
 # create the tools
 @tool(response_format="content_and_artifact")
@@ -47,7 +48,11 @@ def retrieve(query: str):
 
     """Retrieve information related to a query."""
 
+    # TODO - only return very relavant results
+
     retrieved_docs = vector_store.similarity_search(query, k=2)
+    # retrieved_docs = vector_store.similarity_search_by_vector_with_relevance_scores(query, 5)
+
     serialized = "\n\n".join(
         (f"Source: {doc.metadata}\n" f"Content: {doc.page_content}")
         for doc in retrieved_docs
@@ -64,7 +69,25 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 # invoke the agent
-response = agent_executor.invoke({"input": "why is agentic rag better than naive rag?"})
+response = agent_executor.invoke({"input": "Do we have any books by Sarah Christou?"})
+
+# put the result on the screen
+print(response["output"])
+
+# invoke the agent
+response = agent_executor.invoke({"input": "Do we have any books by Kirsty Applebaum or Sarah Christou?"})
+
+# put the result on the screen
+print(response["output"])
+
+# invoke the agent
+response = agent_executor.invoke({"input": "Do we have any books by Kirsty Applebaum?"})
+
+# put the result on the screen
+print(response["output"])
+
+# invoke the agent
+response = agent_executor.invoke({"input": "Do we have any books about Islam?"})
 
 # put the result on the screen
 print(response["output"])

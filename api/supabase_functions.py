@@ -34,11 +34,15 @@ def get_authenticated_client() -> Client:
     return supabase_client
 
 
-def get_all_records(authenticated_supabase_client: Client, table_name: str):
+def get_all_records(authenticated_supabase_client: Client, table_name: str, columns: list = None):
 
     """Fetch all records from the Supabase database."""
 
-    data = authenticated_supabase_client.table(table_name).select("*").execute()
+    # add in optional columms selection
+    if columns:
+        data = authenticated_supabase_client.table(table_name).select(",".join(columns)).execute()
+    else:
+        data = authenticated_supabase_client.table(table_name).select("*").execute()
 
     return data
 
