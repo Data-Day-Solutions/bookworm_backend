@@ -1,38 +1,29 @@
-# import basics
+# Import necessary libraries
 import os
 from dotenv import load_dotenv
-
-# import streamlit
-import streamlit as st
-
-# import langchain
 from langchain.agents import AgentExecutor
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.chat_models import init_chat_model
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain.agents import create_tool_calling_agent
-from langchain import hub
-from langchain_core.prompts import PromptTemplate
 from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_openai import OpenAIEmbeddings
+from langchain import hub
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from supabase.client import Client, create_client
 from langchain_core.tools import tool
 
-# import supabase db
-from supabase.client import Client, create_client
-
-# load environment variables
+# Load environment variables
 load_dotenv()
 
-# initiating supabase
+# Initialize Supabase database
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
-# initiating embeddings model
+# Initialize embeddings model
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
-# initiating vector store
+# Initialize vector store
 vector_store = SupabaseVectorStore(
     embedding=embeddings,
     client=supabase,
@@ -40,14 +31,12 @@ vector_store = SupabaseVectorStore(
     query_name="match_documents",
 )
 
+# Initialize large language model (temperature = 0)
+llm = ChatOpenAI(temperature=0)
 
-# initiating llm
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
-
-# pulling prompt from hub
+# Fetch the prompt from the prompt hub
 prompt = hub.pull("hwchase17/openai-functions-agent")
 
-# TODO - create own prompt
 # Define the manual instructions (context) for the user
 manual_prompt = """
 You are working as a primary school librarian in England. Please survey your database of books to find the best answer for the teacher asking you.
@@ -89,52 +78,49 @@ def retrieve(query: str):
     return serialized, docs
 
 
-# combining all tools
+# Combine the tools and provide them to the LLM
 tools = [retrieve]
-
-# initiating the agent
 agent = create_tool_calling_agent(llm, tools, prompt)
 
-# create the agent executor
+# Create the agent executor
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
-# initiating streamlit app
-st.set_page_config(page_title="Agentic RAG Chatbot", page_icon="🦜")
-st.title("📚 Bookworm RAG Chatbot 📚")
+# Initialize chat history
+chat_history = [SystemMessage(content=manual_prompt)]
 
-# initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = [SystemMessage(content=manual_prompt)]
+# Start the chat session
+print('Welcome to your Agentic RAG Chatbot!')
 
-# display chat messages from history on app rerun
-for message in st.session_state.messages:
-    if isinstance(message, HumanMessage):
-        with st.chat_message("user"):
-            st.markdown(message.content)
-    elif isinstance(message, AIMessage):
-        with st.chat_message("assistant"):
-            st.markdown(message.content)
+while True:
 
+    # Take user query as input
+    user_query = input("You: ")
 
-# create the bar where we can type messages
-user_question = st.chat_input("How are you?")
+    if user_query.lower() == 'exit':
+        print("Goodbye!")
+        break
 
-# did the user submit a prompt?
-if user_question:
+    # Append user query to chat history
+    chat_history.append(HumanMessage(content=user_query))
 
-    # add the message from the user (prompt) to the screen with streamlit
-    with st.chat_message("user"):
-        st.markdown(user_question)
+    # Construct the chat history part of the query
+    chat_history_str = "\n".join([f"User: {msg.content}" if isinstance(msg, HumanMessage) else f"Bot: {msg.content}" for msg in chat_history])
 
-        st.session_state.messages.append(HumanMessage(user_question))
+    # Build the full query by combining manual prompt, chat history, and user query
+    full_query = f"{chat_history_str}\nUser: {user_query}"
 
-    # invoking the agent
-    result = agent_executor.invoke({"input": user_question, "chat_history": st.session_state.messages})
+    # Invoke the agent with the full query including instructions and chat history
+    response = agent_executor.invoke({"input": full_query})
 
-    ai_message = result["output"]
+    # Get AI response from the agent
+    ai_message = response["output"]
 
-    # adding the response from the llm to the screen (and chat)
-    with st.chat_message("assistant"):
-        st.markdown(ai_message)
+    # Print AI's response
+    print(f"Bot: 📚 {ai_message} 📚")
 
-        st.session_state.messages.append(AIMessage(ai_message))
+    # Append AI response to chat history
+    chat_history.append(AIMessage(content=ai_message))
+
+    # Optionally, you can save this history to a file for logging purposes:
+    # with open("chat_history.txt", "a") as f:
+    #     f.write(f"User: {user_query}\nBot: {ai_message}\n\n")

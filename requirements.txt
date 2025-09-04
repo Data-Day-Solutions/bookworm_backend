@@ -24,4 +24,6 @@ langsmith==0.3.11
 pypdf==5.3.0
 # streamlit==1.42.2
 
+scikit-learn==1.7.1
+
 # Note: Ensure that Tesseract OCR is installed on your system for pytesseract to work.

@@ -1,5 +1,7 @@
 # import basics
 import os
+import json
+from tqdm import tqdm
 from dotenv import load_dotenv
 
 # import langchain
@@ -57,6 +59,7 @@ for book in book_data.data:
 
 columns.remove('extended_summary')
 columns.remove('full_text')
+# columns.remove('summary')
 
 # consider having a single record which contains all book summaries?
 # or just each book's summary as full text
@@ -73,6 +76,11 @@ for book in book_data.data:
     # create artificial pages based on full_text length
     book['page'] = 1
 
+    if book['full_text'] == "Full text goes here.":
+        book['full_text'] = book['summary']
+    else:
+        book['full_text'] = book['full_text'] + '\n' + book['summary']
+
     # split book into chunks of 2000 characters - based on full_text
     for i in range(0, len(book['full_text']), 2000):
 
@@ -82,6 +90,12 @@ for book in book_data.data:
         metadata = {col: book[col] for col in columns if col in book}
         metadata['page'] = book['page']
 
+        # include metadata in each chunk
+        # convert metadata to string - is there value to adding metadata into chunks?
+        # it is retrieved by similarity doc retreival and inserted into prompt
+        # also - can add in manual metadata filtering at search time - based on user input
+        # chunk = json.dumps(metadata) + '\n\nText:\n' + chunk
+
         doc = Document(page_content=chunk, metadata=metadata)
         documents.append(doc)
         book['page'] += 1
@@ -90,26 +104,39 @@ for book in book_data.data:
 
 # TODO - only add new books
 
-test_documents = documents[:200]  # limit to first 5 for testing
+# test_documents = documents[:200]  # limit to first 5 for testing
 
-# add document which corresponds to book['title'] == 'Romeo and Juliet'
-for doc in documents:
-    if doc.metadata['title'] == 'Romeo and Juliet':
-        test_documents.append(doc)
+# # add document which corresponds to book['title'] == 'Romeo and Juliet'
+# for doc in documents:
+#     if doc.metadata['title'] == 'Romeo and Juliet':
+#         test_documents.append(doc)
 
-documents = test_documents
+# documents = test_documents
+# docs = test_documents
 print(f"Total documents to process: {len(documents)}")
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-docs = text_splitter.split_documents(documents)
+# text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+# docs = text_splitter.split_documents(documents)
 
-# store chunks in vector store
-# verbose output to see progress
-vector_store = SupabaseVectorStore.from_documents(
-    docs,
-    embeddings,
-    client=supabase,
-    table_name="documents",
-    query_name="match_documents",
-    chunk_size=1000,
-)
+
+# split up documents list to add
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+doc_chunks = chunks(documents, 10)
+
+for doc_chunk in tqdm(doc_chunks):
+
+    # store chunks in vector store
+    # verbose output to see progress
+    vector_store = SupabaseVectorStore.from_documents(
+        doc_chunk,
+        embeddings,
+        client=supabase,
+        table_name="documents",
+        query_name="match_documents",
+        chunk_size=2000,
+    )

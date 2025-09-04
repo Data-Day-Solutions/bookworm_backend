@@ -29,11 +29,14 @@ try:
     from image_recognition import detect_and_decode_barcode
 except (ImportError, ModuleNotFoundError):
     from api.image_recognition import detect_and_decode_barcode
-
 try:
     from book_functions import create_book_record_using_isbn
 except (ImportError, ModuleNotFoundError):
     from api.book_functions import create_book_record_using_isbn
+try:
+    from rag_chatbot_function import run_chatbot
+except (ImportError, ModuleNotFoundError):
+    from rag_chatbot_function import run_chatbot
 
 app = Flask(__name__)
 
@@ -590,6 +593,22 @@ def add_text_to_book(book_id):
 
         # TODO - consider if text needs to be returned to user - this takes up bandwidth
         return jsonify({"message": "Text added to book record successfully.", "data": extracted_text}), 200
+    else:
+        return jsonify({"message": "User not authenticated.", "data": None}), 401
+
+
+@app.route('/chatbot', methods=['POST'])
+def chatbot():
+
+    """Chatbot."""
+
+    if session:
+
+        data = request.get_json()
+        user_prompt = data.get('user_prompt')
+        chatbot_response = run_chatbot(user_prompt)
+
+        return jsonify({"message": "Successfully processed prompt.", "data": chatbot_response}), 200
     else:
         return jsonify({"message": "User not authenticated.", "data": None}), 401
 
