@@ -5,7 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
-from supabase_functions import get_authenticated_client
+from api.tools.supabase_functions import get_authenticated_client
 
 
 def get_lexile_by_isbn(isbn: str) -> str:

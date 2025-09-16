@@ -14,7 +14,7 @@ from langchain.schema import Document
 
 # import supabase
 from supabase.client import Client, create_client
-from supabase_functions import get_all_records
+from api.tools.supabase_functions import get_all_records
 
 # load environment variables
 load_dotenv()

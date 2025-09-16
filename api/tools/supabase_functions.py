@@ -1,12 +1,12 @@
 import os
-from flask import Flask, session, request, redirect, url_for, jsonify
+from flask import session
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
 try:
-    from book_functions import create_book_record_using_isbn, clean_isbn
+    from tools.book_functions import create_book_record_using_isbn, clean_isbn
 except (ImportError, ModuleNotFoundError):
-    from api.book_functions import create_book_record_using_isbn, clean_isbn
+    from api.tools.book_functions import create_book_record_using_isbn, clean_isbn
 
 load_dotenv()
 
@@ -169,6 +169,19 @@ def sign_in_user(authenticated_supabase_client: Client, email: str, password: st
     authenticated_supabase_client.auth.sign_in_with_password({"email": email, "password": password})
 
     return authenticated_supabase_client
+
+
+def check_session():
+
+    """Check if a user session is active."""
+
+    # check access token validity
+    try:
+        access_token = session['access_token']
+        if access_token:
+            return True
+    except (KeyError, ValueError, RuntimeError):
+        return False
 
 
 if __name__ == "__main__":

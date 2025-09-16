@@ -2,11 +2,6 @@ import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-try:
-    from book_functions import create_book_record_using_isbn
-except (ImportError, ModuleNotFoundError):
-    from api.book_functions import create_book_record_using_isbn
-
 load_dotenv()
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
