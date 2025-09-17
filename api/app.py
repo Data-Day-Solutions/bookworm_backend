@@ -32,7 +32,7 @@ app.config['SWAGGER'] = {
     'title': "My Bookworm Flask API",
     'uiversion': 3  # Swagger UI version 3
 }
-swagger = Swagger(app)  # Initialize Flasgger
+swagger = Swagger(app)
 
 # CORS setup
 CORS(app, supports_credentials=True, origins=["http://localhost:19260"])
