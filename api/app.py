@@ -80,7 +80,7 @@ def home():
 # Register your other routes
 # app.register_blueprint(mod, url_prefix='')
 app.register_blueprint(chat_bp, url_prefix="")
-app.register_blueprint(book_bp, url_prefix="") # TODO - issue here with docstrings
+app.register_blueprint(book_bp, url_prefix="")
 app.register_blueprint(file_bp, url_prefix="")
 app.register_blueprint(user_bp, url_prefix="")
 

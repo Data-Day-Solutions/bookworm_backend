@@ -1,3 +1,6 @@
+from flask import request, jsonify
+from flask import Blueprint
+
 try:
     from ragbot_tools.rag_chatbot_function import run_chatbot
 except (ImportError, ModuleNotFoundError):
@@ -8,38 +11,46 @@ try:
 except (ImportError, ModuleNotFoundError):
     from api.tools.supabase_functions import check_session
 
-from flask import request, jsonify
-from flask import Blueprint
 
 chat_bp = Blueprint("chat", __name__)
-
-# routes = []
 
 
 @chat_bp.route('/chatbot', methods=['POST'])
 def chatbot():
 
     """
-    Chatbot List Endpoint
+    Chat with Buddy
     ---
+    tags:
+      - Chat
     post:
-      description: Chat with Buddy
+      description: Send a prompt to the chatbot and receive a response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_prompt:
+                  type: string
+                  example: "Tell me a joke about books."
       responses:
         200:
-          description: A list of books
+          description: Chatbot successfully processed the prompt
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                      example: 1
-                    title:
-                      type: string
-                      example: "The Hobbit"
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Successfully processed prompt."
+                  data:
+                    type: string
+                    example: "Why did the book go to the doctor? Because it had a bad spine!"
+        401:
+          description: Unauthorized - user is not authenticated
     """
 
     if check_session():
@@ -53,7 +64,33 @@ def chatbot():
         return jsonify({"message": "User not authenticated.", "data": None}), 401
 
 
-# routes.append(dict(
-#     rule='/chatbot',
-#     view_func=chatbot,
-#     options=dict(methods=['POST'])))
+@chat_bp.route('/chatbot/example', methods=['GET'])
+def chatbot_example():
+
+    """
+    Chatbot Example Endpoint
+    ---
+    tags:
+      - Chat
+    get:
+      description: Get a sample chatbot response without authentication.
+      responses:
+        200:
+          description: Example chatbot response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Example chatbot response."
+                  data:
+                    type: string
+                    example: "Hello! I'm Buddy, your friendly chatbot 😄"
+    """
+
+    return jsonify({
+        "message": "Example chatbot response.",
+        "data": "Hello! I'm Buddy, your friendly chatbot 😄"
+    }), 200

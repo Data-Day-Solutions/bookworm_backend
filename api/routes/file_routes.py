@@ -25,14 +25,79 @@ except (ImportError, ModuleNotFoundError):
 
 file_bp = Blueprint("file", __name__)
 
-# routes = []
 
-
-# create route to load data from a provided csv file
 @file_bp.route('/upload_isbn_csv', methods=['POST'])
 def upload_isbn_csv():
 
-    """Endpoint to upload a CSV file."""
+    """
+    Upload ISBN CSV
+    ---
+    tags:
+      - File Uploads
+    summary: Upload a CSV containing ISBN numbers.
+    description: >
+      Accepts a CSV file containing ISBN numbers.  
+      Each ISBN is processed and added to the database via Supabase.  
+
+      **Requirements:**
+      - The CSV must contain a column named `ISBN`.
+      - Only `.csv` files are accepted.
+
+      **Notes:**
+      - Duplicate or invalid ISBNs may be skipped.
+      - Error handling for missing or invalid ISBNs is not yet implemented.
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+                description: CSV file containing a column named `ISBN`.
+    responses:
+      200:
+        description: File processed successfully and books added.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "File uploaded successfully. Books added."
+                data:
+                  type: string
+                  nullable: true
+      400:
+        description: Invalid request (e.g., no file provided, wrong format, or missing ISBN column).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "CSV file must contain an 'ISBN' column."
+                data:
+                  type: string
+                  nullable: true
+      401:
+        description: Unauthorized - user not authenticated.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "User not authenticated."
+                data:
+                  type: string
+                  nullable: true
+    """
 
     if check_session():
 
@@ -54,28 +119,19 @@ def upload_isbn_csv():
             # Process the CSV file here
             isbn_df = pd.read_csv(upload_filename)
 
-            # Process df and add records to the database
-            # Ensure the 'ISBN' column exists in the DataFrame
             if 'ISBN' not in isbn_df.columns:
-                return jsonify({"message":
-                                "CSV file must contain an 'ISBN' column.",
+                return jsonify({"message": "CSV file must contain an 'ISBN' column.",
                                 "data": None}), 400
 
-            # Extract ISBNs from the DataFrame
+            # Extract ISBNs and clean them
             isbn_list = isbn_df['ISBN'].tolist()
-            isbn_list = [str(isbn).strip() for isbn in isbn_list if pd.notna(isbn)]  # Ensure ISBNs are strings and not NaN
-            for isbn in tqdm(isbn_list):
+            isbn_list = [str(isbn).strip() for isbn in isbn_list if pd.notna(isbn)]
 
-                # Create book record using the ISBN
+            for isbn in tqdm(isbn_list):
                 authenticated_supabase_client = get_authenticated_client()
-                message = add_book_record_using_isbn(authenticated_supabase_client, isbn)
+                add_book_record_using_isbn(authenticated_supabase_client, isbn)
 
             os.remove(upload_filename)
-
-            # TODO - add error handling for missing ISBNs, invalid ISBNs, etc. Inform user about the number of books added.
-            # TODO - also provide user information about the books that were not added due to errors
-            # TODO - return the list of added books or a summary of the operation
-            # TODO - mention duplicate ISBNs and how they were handled
 
             return jsonify({"message": "File uploaded successfully. Books added.", "data": None}), 200
         else:
@@ -87,16 +143,79 @@ def upload_isbn_csv():
 @file_bp.route('/upload_image_for_isbn', methods=['POST'])
 def upload_image_for_isbn():
 
-    """Endpoint to upload an image file."""
+    """
+    Upload Image for ISBN
+    ---
+    tags:
+      - File Uploads
+    summary: Upload an image to detect an ISBN barcode.
+    description: >
+      Accepts an image file, scans it for barcodes, and extracts a possible ISBN number.  
+      If an ISBN is detected, it is used to create a new book record in the database.  
 
-    # TODO - check if the user is authenticated before allowing image upload
-    # validate inputs - look into pydantic
+      **Notes:**
+      - Currently, only the first detected barcode is used.
+      - Only image files are accepted.
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+                description: An image file containing an ISBN barcode.
+    responses:
+      200:
+        description: Book record created successfully from detected ISBN.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                book_id:
+                  type: integer
+                  example: 123
+                title:
+                  type: string
+                  example: "The Hobbit"
+                isbn:
+                  type: string
+                  example: "9780547928227"
+      400:
+        description: No barcode detected or invalid file format.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "No barcode detected in the image."
+                data:
+                  type: string
+                  nullable: true
+      401:
+        description: Unauthorized - user not authenticated.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "User not authenticated."
+                data:
+                  type: string
+                  nullable: true
+    """
+
     if check_session():
-
-        # data = request.get_json()
-
         if 'file' not in request.files:
             return jsonify({"message": "No file part in the request.", "data": None}), 400
+
         file = request.files['file']
 
         if file.filename == '':
@@ -110,15 +229,11 @@ def upload_image_for_isbn():
         barcodes = detect_and_decode_barcode(image)
         os.remove(upload_filename)
 
-        # get the possible ISBNs from the barcodes
         try:
-
-            # TODO - If multiple barcodes are detected, use the first one - needs to be improved
+            # Use the first detected barcode (assumed ISBN)
             isbn_number = barcodes[0]
 
             authenticated_supabase_client = get_authenticated_client()
-
-            # adds book to main library and returns the book record - for user to confirm to add to their library
             book_record = add_book_record_using_isbn(authenticated_supabase_client, isbn_number)
 
             return jsonify(book_record), 200
@@ -131,19 +246,88 @@ def upload_image_for_isbn():
 
 # add route to accept a pdf file upload and extract text using pdfplumber
 @file_bp.route('/upload_pdf/<int:book_id>', methods=['POST'])
-def upload_pdf():
+def upload_pdf(book_id):
 
-    """Endpoint to upload a PDF file."""
+    """
+    Upload PDF for a Book and Extract Text
+    ---
+    tags:
+      - File Uploads
+    summary: Upload a PDF file for a book and extract text
+    description: >
+      This endpoint allows users to upload a PDF file for a specific book.  
+      It will attempt to extract text using **pdfplumber**.  
+      If extraction fails (e.g., scanned PDFs), the system will fall back to OCR using Tesseract.  
+
+      **Notes:**
+      - Only PDF files are accepted.
+      - A valid `book_id` must be supplied in the URL.
+      - Extracted text may require manual cleanup for formatting issues.
+    parameters:
+      - in: path
+        name: book_id
+        required: true
+        schema:
+          type: integer
+        description: The ID of the book the PDF should be associated with.
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+                description: PDF file to upload and process.
+    responses:
+      200:
+        description: PDF uploaded and text extracted successfully.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "File uploaded and text extracted successfully."
+                data:
+                  type: string
+                  example: "Once upon a time, in a hole in the ground there lived a hobbit..."
+      400:
+        description: Invalid file format or processing error.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Invalid file format. Only PDF files are allowed."
+                data:
+                  type: string
+                  nullable: true
+      401:
+        description: Unauthorized - user not authenticated.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "User not authenticated."
+                data:
+                  type: string
+                  nullable: true
+    """
 
     # TODO - add in user-flag to select between normal text extraction and OCR
     # normal text extraction is faster and more accurate if the PDF is machine readable
     # OCR is needed for scanned documents and images embedded in PDFs
     # But also - machine readable can have formatting issues (missing spaces, line breaks, etc) - which OCR can sometimes handle better
-    # But this would take much longer to process
     # Maybe use a hybrid approach - try normal extraction first, if the text is below a certain threshold, then use OCR
-    # How to check if spaces are being missed? - check for very long words?
-    # Maybe use a heuristic - if the average word length is above a certain threshold, then use OCR
-    # This might not be a common scenario though - most machine readable PDFs should be fine with normal extraction
 
     if check_session():
 
@@ -159,10 +343,6 @@ def upload_pdf():
             upload_filename = os.path.join('api', 'uploads', filename)
             file.save(upload_filename)
 
-            # save file to table uploads - with user_id, filename, file_url, upload_date
-            # TODO - add error handling for file save issues - duplicate filenames, etc.
-            # TODO - add file size limit checks - both client side and server side
-            # TODO - add file type checks - only allow pdfs
             authenticated_supabase_client = get_authenticated_client()
 
             with open(upload_filename, "rb") as f:
@@ -176,62 +356,41 @@ def upload_pdf():
                     )
                 )
 
-            # if file is successfully uploaded, get the public url
             if response:
                 file_url = authenticated_supabase_client.storage.from_("uploads").get_public_url(f"public/{filename}")
 
-                # get book_id if available from the request
-                # TODO - validate book_id exists in books table
-                # TODO - handle case where book_id is not provided
-                # Should only have one file record per book
-                book_id = request.view_args['book_id']
-
                 record = {
-                    # "user_id": str(authenticated_supabase_client.auth.get_user().user.id),
                     "book_file": file_url,
                     "book_id": book_id
                 }
 
-            add_record(authenticated_supabase_client, "book_files", record)
+                add_record(authenticated_supabase_client, "book_files", record)
 
             all_text = ""
             combined_text = ""
 
             with pdfplumber.open(upload_filename) as pdf:
                 for page in tqdm(pdf.pages):
-
                     page_text = page.extract_text()
                     combined_text += page_text
                     all_text += page_text + "\n"
 
             if not combined_text:
-
                 all_text = ""
                 with pdfplumber.open(upload_filename) as pdf:
-
                     for page in tqdm(pdf.pages):
-
-                        # Convert PDF page to an image
                         pil_image = page.to_image(resolution=300).original
-
-                        # Use pytesseract to perform OCR on the image
                         text = pytesseract.image_to_string(pil_image)
                         all_text += text + "\n"
 
-            # all_text = all_text.replace("\n", " ")
             all_text.replace("  ", " ")
-
-            # print(all_text)
 
             os.remove(upload_filename)
 
-            # TODO - add error handling for empty pdfs, etc.
-            # TODO - in frontend, display the extracted text and allow user to confirm before adding to book record
-            # TODO - add option to select specific pages to extract text from
-            # TODO - Warn user is the accuracy may be low - recommend using a machine readable PDF or high quality scan
-
-            response = jsonify({"message": "File uploaded and text extracted successfully.", "data": all_text}), 200
-            return response
+            return jsonify({
+                "message": "File uploaded and text extracted successfully.",
+                "data": all_text
+            }), 200
         else:
             return jsonify({"message": "Invalid file format. Only PDF files are allowed.", "data": None}), 400
     else:
@@ -241,55 +400,110 @@ def upload_pdf():
 @file_bp.route('/add_text_to_book/<int:book_id>', methods=['POST'])
 def add_text_to_book(book_id):
 
-    """Add extracted text to a book record."""
+    """
+    Add Extracted Text to Book Record
+    ---
+    tags:
+      - Book Management
+    summary: Add text content to a specific book
+    description: >
+      This endpoint allows authenticated users to add text to a book record.
+      Users can either provide raw text via `extracted_text` form-data or upload a PDF file, which will be processed and extracted.  
 
-    # TODO - give user option to provide text or pdf upload
+      **Notes:**
+      - Only PDF files are supported for file uploads.  
+      - Extracted text is stored in the `full_text` field of the book record.  
+      - Large text inputs may need chunking due to database size limits.
+    parameters:
+      - in: path
+        name: book_id
+        required: true
+        schema:
+          type: integer
+        description: The ID of the book to update.
+    requestBody:
+      required: false
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              extracted_text:
+                type: string
+                description: Raw text to add to the book record.
+              file:
+                type: string
+                format: binary
+                description: PDF file to extract text from.
+    responses:
+      200:
+        description: Text added successfully to the book record.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Text added to book record successfully."
+                data:
+                  type: string
+                  description: The text that was added to the book record.
+                  example: "Once upon a time..."
+      400:
+        description: Invalid input or missing text/file.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "No text or file provided to add to the book."
+                data:
+                  type: string
+                  nullable: true
+      401:
+        description: Unauthorized - user not authenticated.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "User not authenticated."
+                data:
+                  type: string
+                  nullable: true
+    """
 
     if check_session():
 
-        # sending data from postman as form-data with key extracted_text and text value
         try:
             extracted_text = request.form.get('extracted_text')
         except AttributeError:
             extracted_text = ""
 
-        # TODO - validate book_id exists
-        # TODO - validate extracted_text is not empty
-        # TODO - handle large text inputs - supabase has a limit of 1MB per field
-        # TODO - consider storing large texts in a separate table or using a file storage service
-        # TODO - provide feedback to user if text is too large to be added
-        # TODO - consider text chunking for very large texts - Chapter-wise or section-wise storage
-        # TODO - consider text summarization for very large texts to store a concise version
-        # TODO - consider indexing the text for search functionality
-
-        # check for pdf file upload
+        # check for PDF file upload
         if 'file' in request.files:
-
             file = request.files['file']
             if file and werkzeug.utils.secure_filename(file.filename).endswith('.pdf'):
-                # get the extracted text from the pdf upload function                
+                # extract text from uploaded PDF
                 response = upload_pdf()
                 extracted_text = response[0].json['data']
             else:
                 if not extracted_text:
                     return jsonify({"message": "No text or file provided to add to the book.", "data": None}), 400
 
-        # check byte size of extracted_text - must be less than 1MB
-        # if len(extracted_text.encode('utf-8')) > 1_000_000:
-        #     return jsonify({"message": "Extracted text is too large to be added to the book. Please provide text under 1MB.", "data": None}), 400
-
         authenticated_supabase_client = get_authenticated_client()
 
         # update the book record with the extracted text
         authenticated_supabase_client.table("books").update({"full_text": extracted_text}).eq("book_id", book_id).execute()
 
-        # TODO - consider if text needs to be returned to user - this takes up bandwidth
         return jsonify({"message": "Text added to book record successfully.", "data": extracted_text}), 200
     else:
         return jsonify({"message": "User not authenticated.", "data": None}), 401
 
 
 # routes.append(dict(rule='/upload_isbn_csv', view_func=upload_isbn_csv, options=dict(methods=['POST'])))
-# routes.append(dict(rule='/upload_image_for_isbn', view_func=upload_image_for_isbn, options=dict(methods=['POST'])))
-# routes.append(dict(rule='/upload_pdf', view_func=upload_pdf, options=dict(methods=['POST'])))
-# routes.append(dict(rule='/add_text_to_book/<int:book_id>', view_func=add_text_to_book, options=dict(methods=['POST'])))

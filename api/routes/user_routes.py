@@ -16,29 +16,67 @@ SUPABASE_KEY = os.environ['SUPABASE_KEY']
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# routes = []
-
 
 @user_bp.route('/create_new_user', methods=['POST'])
 def create_new_user():
 
-    """Route to create users."""
+    """
+    Create New User
+    ---
+    tags:
+      - User Management
+    summary: Create a new user account
+    description: >
+      This endpoint allows authenticated users to create a new Supabase user account by providing an email and password.  
+      Response will include a success message and any relevant data from Supabase.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+                example: "user@example.com"
+              password:
+                type: string
+                example: "StrongPassword123!"
+    responses:
+      200:
+        description: User created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "User created successfully."
+                data:
+                  type: object
+                  nullable: true
+      401:
+        description: Unauthorized - user not authenticated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "User not authenticated."
+                data:
+                  type: object
+                  nullable: true
+    """
 
     if check_session():
-
         data = request.get_json()
-
         email = data.get('email')
         password = data.get('password')
-
-        # handle errors
-
         response = create_new_supabase_user(email, password)
-
-        # TODO - Ensure that response is in standard format
-
         return jsonify(response), 200
-
     else:
         return jsonify({"message": "User not authenticated.", "data": None}), 401
 
@@ -46,29 +84,83 @@ def create_new_user():
 @user_bp.route('/login', methods=['POST'])
 def login():
 
-    """Login route to authenticate users."""
+    """
+    User Login
+    ---
+    tags:
+      - User Management
+    summary: Authenticate a user and create a session
+    description: >
+      Logs in a user using email and password. On success, stores `access_token` and `refresh_token` in session.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+                example: "user@example.com"
+              password:
+                type: string
+                example: "StrongPassword123!"
+    responses:
+      200:
+        description: Login successful
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Login successful."
+                data:
+                  type: object
+                  nullable: true
+    """
 
     data = request.get_json()
-
     email = data.get('email')
     password = data.get('password')
-
-    # handle errors
     res = supabase.auth.sign_in_with_password({'email': email, 'password': password})
 
     session['access_token'] = res.session.access_token
     session['refresh_token'] = res.session.refresh_token
 
-    return jsonify({
-        "message": "Login successful.",
-        "data": None
-    }), 200
+    return jsonify({"message": "Login successful.", "data": None}), 200
 
 
 @user_bp.route('/dashboard', methods=['GET'])
 def dashboard():
 
-    """Dashboard route that requires authentication."""
+    """
+    Dashboard Access
+    ---
+    tags:
+      - User Management
+    summary: Access the user dashboard
+    description: >
+      Returns a message indicating successful access to the dashboard for authenticated users.
+      If not authenticated, redirects to the login page.
+    responses:
+      200:
+        description: Dashboard accessed successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Dashboard re-direction successful."
+                data:
+                  type: object
+                  nullable: true
+      302:
+        description: Redirect to login if not authenticated
+    """
 
     client = get_authenticated_client()
     user = client.auth.get_user()
@@ -76,35 +168,56 @@ def dashboard():
     if not user.user:
         return redirect(url_for('login'))
 
-    return jsonify({
-        "message": "Dasboard re-direction successful.",
-        "data": None
-    }), 200
+    return jsonify({"message": "Dashboard re-direction successful.", "data": None}), 200
 
 
 @user_bp.route('/logout', methods=['GET'])
 def logout():
 
-    """Logout route to clear session tokens."""
+    """
+    Logout User
+    ---
+    tags:
+      - User Management
+    summary: Logout and clear session tokens
+    description: >
+      Logs out the authenticated user by clearing their session tokens and signing out from Supabase.
+    responses:
+      200:
+        description: Logout successful
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "Logout successful."
+                data:
+                  type: object
+                  nullable: true
+      400:
+        description: No active session
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  example: "No active session."
+                data:
+                  type: object
+                  nullable: true
+    """
 
     if check_session():
 
         client = get_authenticated_client()
         client.auth.sign_out()
-
         session.pop('access_token', None)
         session.pop('refresh_token', None)
 
-        return jsonify({
-            "message": "Logout successful.",
-            "data": None
-        }), 200
-
+        return jsonify({"message": "Logout successful.", "data": None}), 200
     else:
         return jsonify({"message": "No active session.", "data": None}), 400
-
-
-# routes.append(dict(rule='/create_new_user', view_func=create_new_user, options=dict(methods=['POST'])))
-# routes.append(dict(rule='/login', view_func=login, options=dict(methods=['POST'])))
-# routes.append(dict(rule='/dashboard', view_func=dashboard, options=dict(methods=['GET'])))
-# routes.append(dict(rule='/logout', view_func=logout, options=dict(methods=['GET'])))
