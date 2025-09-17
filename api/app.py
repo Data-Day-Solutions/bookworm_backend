@@ -4,11 +4,6 @@ from datetime import timedelta
 from flask_restful import Api
 from flasgger import Swagger
 
-# try:
-#     from routes.blueprint_routes import mod
-# except (ImportError, ModuleNotFoundError):
-#     from api.routes.blueprint_routes import mod
-
 try:
     from routes.chat_routes import chat_bp
 except (ImportError, ModuleNotFoundError):
@@ -31,8 +26,6 @@ except (ImportError, ModuleNotFoundError):
 
 app = Flask(__name__)
 api = Api(app)
-
-# api.add_resource(chatbot, '/chatbot')
 
 # Swagger config (auto-generates swagger.json at /apidocs/swagger.json)
 app.config['SWAGGER'] = {
