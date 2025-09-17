@@ -121,7 +121,7 @@ def get_user_library():
     """
 
     if check_session():
-        
+
         authenticated_supabase_client = get_authenticated_client()
         library_id = 0
         user_id = str(authenticated_supabase_client.auth.get_user().user.id)
@@ -156,7 +156,11 @@ def get_all_user_books():
 
         authenticated_supabase_client = get_authenticated_client()
         user_library_details = get_user_library()
-        user_library_id = user_library_details[0].json['library_id']
+
+        try:
+            user_library_id = user_library_details[0].json['library_id']
+        except KeyError:
+            return jsonify({"message": "User does not have an any books in their library. Add now!", "data": None}), 403
 
         response = authenticated_supabase_client.table("user_library_books").select("* , books (*)").eq("library_id", user_library_id).execute()
 

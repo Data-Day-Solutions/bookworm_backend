@@ -490,7 +490,7 @@ def add_text_to_book(book_id):
             file = request.files['file']
             if file and werkzeug.utils.secure_filename(file.filename).endswith('.pdf'):
                 # extract text from uploaded PDF
-                response = upload_pdf()
+                response = upload_pdf(book_id)
                 extracted_text = response[0].json['data']
             else:
                 if not extracted_text:

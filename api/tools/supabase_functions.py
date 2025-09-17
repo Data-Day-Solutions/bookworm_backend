@@ -184,6 +184,34 @@ def check_session():
         return False
 
 
+def check_if_user_is_admin(authenticated_supabase_client: Client):
+
+    """Check if the current user is an admin."""
+
+    user = authenticated_supabase_client.auth.get_user()
+    user_id = str(user.user.id)
+
+    data = authenticated_supabase_client.table("users").select("is_admin").eq("user_id", user_id).execute()
+
+    if data.data and data.data[0]['is_admin']:
+        return True
+    else:
+        return False
+
+
+# def check_if_user_exists_for_given_email(email_address: str):
+
+#     """Check if a user exists in the Supabase database by their email."""
+
+#     authenticated_supabase_client = get_authenticated_client()
+
+#     email_address = email_address.lower().strip()
+
+#     data = authenticated_supabase_client.table("Users").select("Email").eq("Email", email_address).execute()
+
+#     return len(data.data) > 0
+
+
 if __name__ == "__main__":
 
     authenticated_supabase_client = get_authenticated_client()
