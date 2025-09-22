@@ -1,31 +1,28 @@
-# Import necessary libraries
 import os
 from dotenv import load_dotenv
-from langchain.agents import AgentExecutor
+
+from langchain_community.callbacks import get_openai_callback
+from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.agents import create_tool_calling_agent
+from langchain.chains.llm import LLMChain
 from langchain_community.vectorstores import SupabaseVectorStore
 from langchain_openai import OpenAIEmbeddings
-from langchain import hub
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
-from supabase.client import Client, create_client
 from langchain_core.tools import tool
+from supabase.client import Client, create_client
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from flask import session
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Supabase database
+# Initialize Supabase
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
-# Initialize embeddings model
+# Initialize embeddings & vector store
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-# Initialize vector store
 vector_store = SupabaseVectorStore(
     embedding=embeddings,
     client=supabase,
@@ -33,18 +30,8 @@ vector_store = SupabaseVectorStore(
     query_name="match_documents",
 )
 
-# Initialize large language model (temperature = 0)
+# Initialize LLM
 llm = ChatOpenAI(temperature=0)
-
-# Fetch the prompt from the prompt hub
-prompt = hub.pull("hwchase17/openai-functions-agent")
-
-# Define the manual instructions (context) for the user
-manual_prompt = """
-You are working as a primary school librarian in England. Please survey your database of books to find the best answer for the teacher asking you.
-You should consider all available documents in your database when providing your response, and base your answer on the most relevant documents that match the query.
-Be polite, concise, and informative. Only use information from the documents you find.
-"""
 
 
 def serialize_message(msg):
@@ -62,76 +49,132 @@ def deserialize_message(d):
         raise ValueError(f"Unknown message type: {d['type']}")
 
 
-# Create the tools
+def simplify_question(user_question: str) -> str:
+
+    """
+    Use the LLM to reduce the user question to a concise query suitable for retrieval.
+    """
+
+    simplification_prompt = f"""
+    Simplify the following user question to a short search query.
+    Keep the meaning, remove extra words, and focus on keywords:
+
+    Question: {user_question}
+
+    Short query:
+    """
+
+    simplified = llm.predict(simplification_prompt).strip()
+
+    return simplified
+
+
 @tool(response_format="content_and_artifact")
 def retrieve(query: str):
 
     """Retrieve information related to a query."""
 
-    # retrieval
     retriever = vector_store.as_retriever(
         search_type="similarity_score_threshold",
         search_kwargs={"k": 5, "score_threshold": 0.2},
     )
 
     docs = retriever.invoke(query)
-
-    # will look into passing filters based on user selection
-    # Optionally filter based on metadata (e.g., only documents from recent years)
-    # filtered_docs = [
-    #     doc for doc in filtered_docs if doc.metadata.get("year", 0) > 2020
-    # ]
-
-    # Serialize the results to return
-    serialized = "\n\n".join(
-        (f"Source: {doc.metadata}\n" f"Content: {doc.page_content}")
-        for doc in docs
-    )
+    serialized = "\n\n".join(f"Source: {doc.metadata}\nContent: {doc.page_content}" for doc in docs)
 
     return serialized, docs
 
 
-# Combine the tools and provide them to the LLM
-tools = [retrieve]
-agent = create_tool_calling_agent(llm, tools, prompt)
+initial_prompt = """
+You are working as a primary school librarian in England. Please survey your database of books to find the best answer for the teacher asking you.
+You should consider all available documents in your database when providing your response, and base your answer on the most relevant documents that match the query.
+Be polite, concise, and informative. Only use information from the documents you find.
+"""
 
-# Create the agent executor
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+prompt_template = """
+Use the following retrieved documents to answer the user's question.
+
+Retrieved documents:
+{retrieved_docs}
+
+Question: {question}
+
+Answer:
+"""
+
+prompt = PromptTemplate(
+    input_variables=["retrieved_docs", "question"],
+    template=prompt_template
+)
+
+
+# --- Build a chain that first retrieves and then calls the LLM ---
+def run_chain_with_retrieval(user_question: str, full_history: str):
+
+    # simplify the prompt to get most relevant docs
+    short_query = simplify_question(user_question)
+
+    # Call the retrieval tool
+    retrieved_docs = retrieve.invoke(short_query)
+
+    # Build input for the LLM
+    chain_input = {
+        "retrieved_docs": retrieved_docs,
+        "question": full_history
+    }
+
+    llm_chain = LLMChain(prompt=prompt, llm=llm)
+    response = llm_chain.run(chain_input)
+
+    return response
 
 
 def run_chatbot(user_query):
 
-    # get chat history
     try:
         _ = session['chat_history']
     except KeyError:
-        # Initialize chat history - only do this for a new user session
-        session['chat_history'] = [serialize_message(SystemMessage(content=manual_prompt))]
+        session['chat_history'] = [serialize_message(SystemMessage(content=initial_prompt))]
 
-    # Append user query to chat history
     session['chat_history'].append(serialize_message(HumanMessage(content=user_query)))
 
-    # Convert back to LangChain message objects for agent call
     chat_history_msgs = [deserialize_message(m) for m in session["chat_history"]]
 
-    # Construct the chat history part of the query
-    chat_history_str = "\n".join([f"User: {msg.content}" if isinstance(msg, HumanMessage) else f"Bot: {msg.content}" for msg in chat_history_msgs])
+    full_query = "\n".join([f"User: {msg.content}" if isinstance(msg, HumanMessage) else f"Bot: {msg.content}" for msg in chat_history_msgs])
 
-    # Build the full query by combining manual prompt, chat history, and user query
-    full_query = f"{chat_history_str}\nUser: {user_query}"
+    with get_openai_callback() as cb:
 
-    # Invoke the agent with the full query including instructions and chat history
-    response = agent_executor.invoke({"input": full_query})
+        response = run_chain_with_retrieval(user_query, full_query)
+        print(response)
 
-    # Get AI response from the agent
-    ai_message = response["output"]
+        print("-----------------------------------")
+        print(f"Total Tokens: {cb.total_tokens}")
+        print(f"Prompt Tokens: {cb.prompt_tokens}")
+        print(f"Completion Tokens: {cb.completion_tokens}")
+        print(f"Total Cost (USD): ${cb.total_cost}")
 
-    # Append AI response to chat history
-    session['chat_history'].append(serialize_message(AIMessage(content=ai_message)))
+    session['chat_history'].append(serialize_message(AIMessage(content=response)))
 
-    return ai_message
+    return response
 
     # Save user's chat history to Supabase? Seems like overkill and will dramatically increase token usage
     # Optionally, you can save this history to a file for logging purposes:
     # with open("chat_history.txt", "a") as f:
     #     f.write(f"User: {user_query}\nBot: {ai_message}\n\n")
+
+
+if __name__ == "__main__":
+
+    session = {}
+
+    while True:
+
+        user_query = input("You: ")
+
+        if user_query.lower() == 'exit':
+            print("Goodbye!")
+            break
+
+        response = run_chatbot(user_query)
+
+        print("Bot:", response)
