@@ -32,7 +32,7 @@ supabase: Client = create_client(supabase_url=supabase_url,
 
 # 1. Sign in user
 email = "davidshaw1985@gmail.com"
-password = "password123"
+password = "password1985123"
 
 auth_response = supabase.auth.sign_in_with_password({
     "email": email,

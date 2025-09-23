@@ -23,7 +23,7 @@ embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 vector_store = SupabaseVectorStore(
     embedding=embeddings,
     client=supabase,
-    table_name="documents",
+    table_name="content_map_documents",
     query_name="match_documents",
 )
 

@@ -26,5 +26,8 @@ flask-swagger-ui==5.21.0
 Flask-RESTful==0.3.10
 flask-swagger==0.2.14
 flasgger==0.9.7.1
+unstructured-client==0.42.3
+langchain-unstructured==0.1.6
+# pip install "unstructured[docx]"
 
 # Note: Ensure that Tesseract OCR is installed on your system for pytesseract to work.
