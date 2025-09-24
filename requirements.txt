@@ -29,5 +29,6 @@ flasgger==0.9.7.1
 unstructured-client==0.42.3
 langchain-unstructured==0.1.6
 # pip install "unstructured[docx]"
+langchain-ollama==0.3.8
 
 # Note: Ensure that Tesseract OCR is installed on your system for pytesseract to work.
