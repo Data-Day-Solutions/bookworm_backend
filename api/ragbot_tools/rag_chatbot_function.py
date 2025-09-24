@@ -11,6 +11,9 @@ from langchain_core.tools import tool
 from supabase.client import Client, create_client
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
+from langchain_ollama import ChatOllama
+from langchain_ollama import OllamaEmbeddings
+
 from flask import session
 
 load_dotenv()
@@ -19,7 +22,9 @@ supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+embeddings = OllamaEmbeddings(model="mxbai-embed-large")
+
+# embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 vector_store = SupabaseVectorStore(
     embedding=embeddings,
     client=supabase,
@@ -72,7 +77,7 @@ def retrieve(query: str):
 
     retriever = vector_store.as_retriever(
         search_type="similarity_score_threshold",
-        search_kwargs={"k": 5, "score_threshold": 0.2},
+        search_kwargs={"k": 5, "score_threshold": 0.5},
     )
 
     docs = retriever.invoke(query)

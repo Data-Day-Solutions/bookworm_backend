@@ -26,10 +26,11 @@ vector_store = SupabaseVectorStore(
     embedding=embeddings,
     client=supabase,
     table_name="content_map_documents",
-    query_name="match_documents",
+    query_name="match_content_map_documents",
 )
 
 llm = ChatOllama(model="llama3.1:8b", temperature=0)
+# llm = ChatOllama(model="llama3.2:3b", temperature=0)
 
 
 def serialize_message(msg):
@@ -74,7 +75,7 @@ def retrieve(query: str):
 
     retriever = vector_store.as_retriever(
         search_type="similarity_score_threshold",
-        search_kwargs={"k": 5, "score_threshold": 0.2},
+        search_kwargs={"k": 5, "score_threshold": 0.5},
     )
 
     docs = retriever.invoke(query)
